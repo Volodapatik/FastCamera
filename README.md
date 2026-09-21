@@ -1,2 +1,33 @@
 # FastCamera
-Lightweight and fast camera app for Android (optimized for Redmi Note 14 and similar devices)
+
+Легкий і швидкий додаток камери для Android.
+
+Оптимізований для телефонів типу Redmi Note 14 (Helio G99 / 8GB RAM).
+
+## Функції (v1.0)
+
+- Фото (мінімальна затримка)
+- Відео (з аудіо)
+- Перемикання передньої / задньої камери
+- Спалах: Вимк / Увімк / Авто
+- Тап-фокус
+- Pinch-to-zoom
+- Таймер 3 / 5 / 10 секунд
+- Сітка
+- Збереження в галерею (Pictures/FastCamera та Movies/FastCamera)
+
+## Як встановити
+
+1. Зайди в вкладку **Actions**
+2. Вибери останній успішний workflow **Build APK**
+3. Скачай артефакт `FastCamera-debug`
+4. Розпакуй і встанови `.apk` на телефон (дозволь встановлення з невідомих джерел)
+
+Або натисни **Run workflow** щоб зібрати свіжу версію.
+
+## Технології
+
+- Kotlin
+- CameraX 1.4.1
+- Material 3
+- minSdk 26 / targetSdk 35
