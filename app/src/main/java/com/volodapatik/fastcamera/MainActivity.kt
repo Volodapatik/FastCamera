@@ -2,7 +2,11 @@ package com.volodapatik.fastcamera
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -11,15 +15,20 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
-import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import com.volodapatik.fastcamera.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,8 +48,9 @@ class MainActivity : AppCompatActivity() {
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var isGridVisible = false
     private var isVideoMode = false
-    private var timerSeconds = 0 // 0, 3, 5, 10
+    private var timerSeconds = 0
     private var countDownTimer: CountDownTimer? = null
+    private var lastPhotoUri: Uri? = null
 
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var scaleGestureDetector: ScaleGestureDetector
@@ -58,8 +68,22 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fullscreen + edge-to-edge
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Handle system bars (status + navigation)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            binding.topBar.updatePadding(top = systemBars.top + 8)
+            binding.bottomBar.updatePadding(bottom = systemBars.bottom + 12)
+
+            insets
+        }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -67,10 +91,9 @@ class MainActivity : AppCompatActivity() {
         scaleGestureDetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    val camera = camera ?: return false
-                    val currentZoom = camera.cameraInfo.zoomState.value?.zoomRatio ?: 1f
-                    val delta = detector.scaleFactor
-                    camera.cameraControl.setZoomRatio(currentZoom * delta)
+                    val cam = camera ?: return false
+                    val currentZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+                    cam.cameraControl.setZoomRatio(currentZoom * detector.scaleFactor)
                     return true
                 }
             })
@@ -78,7 +101,6 @@ class MainActivity : AppCompatActivity() {
         binding.previewView.setOnTouchListener { _, event ->
             scaleGestureDetector.onTouchEvent(event)
             if (event.action == MotionEvent.ACTION_UP) {
-                // Tap to focus
                 val factory = binding.previewView.meteringPointFactory
                 val point = factory.createPoint(event.x, event.y)
                 val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
@@ -96,22 +118,15 @@ class MainActivity : AppCompatActivity() {
     private fun setupButtons() {
         binding.btnCapture.setOnClickListener {
             if (isVideoMode) {
-                if (recording != null) {
-                    stopRecording()
-                } else {
-                    startRecordingWithTimer()
-                }
+                if (recording != null) stopRecording() else startRecordingWithTimer()
             } else {
                 takePhotoWithTimer()
             }
         }
 
         binding.btnSwitchCamera.setOnClickListener {
-            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
-                CameraSelector.LENS_FACING_FRONT
-            } else {
-                CameraSelector.LENS_FACING_BACK
-            }
+            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK)
+                CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
             startCamera()
         }
 
@@ -122,7 +137,6 @@ class MainActivity : AppCompatActivity() {
                 else -> ImageCapture.FLASH_MODE_OFF
             }
             imageCapture?.flashMode = flashMode
-            updateFlashIcon()
             val text = when (flashMode) {
                 ImageCapture.FLASH_MODE_ON -> "Спалах: Увімк"
                 ImageCapture.FLASH_MODE_AUTO -> "Спалах: Авто"
@@ -149,39 +163,49 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnMode.setOnClickListener {
             isVideoMode = !isVideoMode
-            updateModeUI()
-            startCamera() // rebind use cases
+            val modeText = if (isVideoMode) "Режим: Відео" else "Режим: Фото"
+            Toast.makeText(this, modeText, Toast.LENGTH_SHORT).show()
+            startCamera()
         }
 
-        binding.btnGallery.setOnClickListener {
-            // Open system gallery
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                type = "image/*"
-                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-            }
+        // Gallery / last photo
+        binding.btnGallery.setOnClickListener { openLastOrGallery() }
+        binding.imgLastPhoto.setOnClickListener { openLastOrGallery() }
+    }
+
+    private fun openLastOrGallery() {
+        val uri = lastPhotoUri
+        if (uri != null) {
             try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
                 startActivity(intent)
             } catch (e: Exception) {
-                Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
+                openSystemGallery()
             }
+        } else {
+            openSystemGallery()
         }
     }
 
-    private fun updateFlashIcon() {
-        // Simple feedback via toast already, can improve icons later
-    }
-
-    private fun updateModeUI() {
-        if (isVideoMode) {
-            binding.btnCapture.setBackgroundResource(android.R.drawable.ic_menu_camera) // temporary
-            Toast.makeText(this, "Режим: Відео", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "Режим: Фото", Toast.LENGTH_SHORT).show()
+    private fun openSystemGallery() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                type = "image/*"
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun checkPermissionsAndStart() {
-        val permissions = mutableListOf(Manifest.permission.CAMERA)
+        val permissions = mutableListOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        )
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
@@ -189,17 +213,13 @@ class MainActivity : AppCompatActivity() {
             permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
             permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
         }
-        permissions.add(Manifest.permission.RECORD_AUDIO)
 
         val allGranted = permissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
 
-        if (allGranted) {
-            startCamera()
-        } else {
-            requestPermissionLauncher.launch(permissions.toTypedArray())
-        }
+        if (allGranted) startCamera()
+        else requestPermissionLauncher.launch(permissions.toTypedArray())
     }
 
     private fun startCamera() {
@@ -213,11 +233,9 @@ class MainActivity : AppCompatActivity() {
     private fun bindCameraUseCases() {
         val cameraProvider = cameraProvider ?: return
 
-        val preview = Preview.Builder()
-            .build()
-            .also {
-                it.surfaceProvider = binding.previewView.surfaceProvider
-            }
+        val preview = Preview.Builder().build().also {
+            it.surfaceProvider = binding.previewView.surfaceProvider
+        }
 
         val cameraSelector = CameraSelector.Builder()
             .requireLensFacing(lensFacing)
@@ -242,16 +260,7 @@ class MainActivity : AppCompatActivity() {
                 arrayOf(preview, imageCapture)
             }
 
-            camera = cameraProvider.bindToLifecycle(
-                this,
-                cameraSelector,
-                *useCases
-            )
-
-            // Enable zoom range if available
-            camera?.cameraInfo?.zoomState?.observe(this) { state ->
-                // Can update UI slider later
-            }
+            camera = cameraProvider.bindToLifecycle(this, cameraSelector, *useCases)
 
         } catch (e: Exception) {
             Log.e(TAG, "Use case binding failed", e)
@@ -260,19 +269,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun takePhotoWithTimer() {
-        if (timerSeconds > 0) {
-            startCountdown(timerSeconds) { takePhoto() }
-        } else {
-            takePhoto()
-        }
+        if (timerSeconds > 0) startCountdown(timerSeconds) { takePhoto() }
+        else takePhoto()
     }
 
     private fun startRecordingWithTimer() {
-        if (timerSeconds > 0) {
-            startCountdown(timerSeconds) { startRecording() }
-        } else {
-            startRecording()
-        }
+        if (timerSeconds > 0) startCountdown(timerSeconds) { startRecording() }
+        else startRecording()
     }
 
     private fun startCountdown(seconds: Int, onFinish: () -> Unit) {
@@ -313,6 +316,11 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    val uri = output.savedUri
+                    if (uri != null) {
+                        lastPhotoUri = uri
+                        showLastPhotoThumbnail(uri)
+                    }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
                 override fun onError(exc: ImageCaptureException) {
@@ -323,9 +331,28 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun showLastPhotoThumbnail(uri: Uri) {
+        try {
+            val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.setTargetSampleSize(8) // small thumbnail
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                MediaStore.Images.Media.getBitmap(contentResolver, uri)
+            }
+
+            binding.imgLastPhoto.setImageBitmap(bitmap)
+            binding.imgLastPhoto.visibility = View.VISIBLE
+            binding.btnGallery.visibility = View.INVISIBLE
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load thumbnail", e)
+        }
+    }
+
     private fun startRecording() {
         val videoCapture = this.videoCapture ?: return
-
         binding.btnCapture.isEnabled = false
 
         val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
@@ -347,8 +374,7 @@ class MainActivity : AppCompatActivity() {
             .prepareRecording(this, mediaStoreOutput)
             .apply {
                 if (PermissionChecker.checkSelfPermission(
-                        this@MainActivity,
-                        Manifest.permission.RECORD_AUDIO
+                        this@MainActivity, Manifest.permission.RECORD_AUDIO
                     ) == PermissionChecker.PERMISSION_GRANTED
                 ) {
                     withAudioEnabled()
@@ -358,11 +384,11 @@ class MainActivity : AppCompatActivity() {
                 when (event) {
                     is VideoRecordEvent.Start -> {
                         binding.btnCapture.isEnabled = true
-                        Toast.makeText(this, "Запис...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "Запис...", Toast.LENGTH_SHORT).show()
                     }
                     is VideoRecordEvent.Finalize -> {
                         if (!event.hasError()) {
-                            Toast.makeText(this, "Відео збережено", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Відео збережено", Toast.LENGTH_SHORT).show()
                         } else {
                             recording?.close()
                             recording = null
