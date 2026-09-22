@@ -2,9 +2,11 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black">
+    android:background="@android:color/black"
+    android:fitsSystemWindows="false">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
@@ -33,40 +35,45 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:gravity="center_vertical"
-        android:background="@color/overlay"
+        android:background="#66000000"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <ImageButton
             android:id="@+id/btnFlash"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:src="@android:drawable/ic_menu_camera"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/flash"
+            android:scaleType="centerInside"
             android:tint="@color/white" />
 
         <ImageButton
             android:id="@+id/btnTimer"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="12dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
             android:src="@android:drawable/ic_menu_recent_history"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/timer"
+            android:scaleType="centerInside"
             android:tint="@color/white" />
 
         <ImageButton
             android:id="@+id/btnGrid"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="12dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
             android:src="@android:drawable/ic_menu_view"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/grid"
+            android:scaleType="centerInside"
             android:tint="@color/white" />
 
         <TextView
@@ -76,17 +83,18 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="@color/white"
-            android:textSize="32sp"
+            android:textSize="36sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
         <ImageButton
             android:id="@+id/btnSwitchCamera"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:src="@android:drawable/ic_menu_rotate"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/switch_camera"
+            android:scaleType="centerInside"
             android:tint="@color/white" />
     </LinearLayout>
 
@@ -96,21 +104,38 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="24dp"
-        android:gravity="center"
-        android:background="@color/overlay"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:gravity="center_vertical"
+        android:background="#66000000"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageButton
-            android:id="@+id/btnGallery"
+        <!-- Gallery with thumbnail -->
+        <FrameLayout
             android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:src="@android:drawable/ic_menu_gallery"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Галерея"
-            android:tint="@color/white" />
+            android:layout_height="56dp">
+
+            <ImageButton
+                android:id="@+id/btnGallery"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@android:drawable/ic_menu_gallery"
+                android:background="@drawable/gallery_button_bg"
+                android:scaleType="centerCrop"
+                android:contentDescription="Галерея"
+                android:tint="@color/white" />
+
+            <ImageView
+                android:id="@+id/imgLastPhoto"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                android:background="@drawable/gallery_button_bg" />
+        </FrameLayout>
 
         <View
             android:layout_width="0dp"
@@ -119,8 +144,8 @@
 
         <ImageButton
             android:id="@+id/btnCapture"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
             android:background="@drawable/capture_button"
             android:contentDescription="@string/take_photo" />
 
@@ -136,21 +161,8 @@
             android:src="@android:drawable/ic_menu_camera"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Режим"
+            android:scaleType="centerInside"
             android:tint="@color/white" />
     </LinearLayout>
-
-    <!-- Zoom slider -->
-    <SeekBar
-        android:id="@+id/zoomSeekBar"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="32dp"
-        android:layout_marginBottom="16dp"
-        android:max="100"
-        android:progress="0"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/bottomBar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
