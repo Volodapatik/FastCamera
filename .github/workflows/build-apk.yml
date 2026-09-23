@@ -22,13 +22,24 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Create keystore
+        run: |
+          keytool -genkey -v -keystore fastcamera.keystore -alias fastcamera -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android123 -keypass android123 \
+            -dname "CN=FastCamera, OU=Dev, O=Volodapatik, L=Kyiv, S=Kyiv, C=UA"
 
-      - name: Upload APK
+      - name: Build Release APK (signed)
+        run: |
+          gradle assembleRelease --stacktrace \
+            -Pandroid.injected.signing.store.file=$PWD/fastcamera.keystore \
+            -Pandroid.injected.signing.store.password=android123 \
+            -Pandroid.injected.signing.key.alias=fastcamera \
+            -Pandroid.injected.signing.key.password=android123
+
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: FastCamera-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: FastCamera-release
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 14
           if-no-files-found: error
