@@ -16,7 +16,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Grid overlay -->
     <View
         android:id="@+id/gridOverlay"
         android:layout_width="0dp"
@@ -165,7 +164,7 @@
             android:tint="@color/white" />
     </LinearLayout>
 
-    <!-- Full-screen photo preview overlay -->
+    <!-- Full-screen photo viewer -->
     <FrameLayout
         android:id="@+id/previewOverlay"
         android:layout_width="0dp"
@@ -185,7 +184,7 @@
             android:layout_height="match_parent"
             android:scaleType="fitCenter" />
 
-        <!-- Top bar of preview -->
+        <!-- Top bar -->
         <LinearLayout
             android:id="@+id/previewTopBar"
             android:layout_width="match_parent"
@@ -225,7 +224,7 @@
                 android:contentDescription="Поділитися" />
         </LinearLayout>
 
-        <!-- Bottom bar of preview -->
+        <!-- Bottom bar with Delete -->
         <LinearLayout
             android:id="@+id/previewBottomBar"
             android:layout_width="match_parent"
@@ -237,13 +236,28 @@
             android:gravity="center">
 
             <TextView
+                android:id="@+id/btnDeletePhoto"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Видалити"
+                android:textColor="#FF5252"
+                android:textSize="16sp"
+                android:padding="14dp"
+                android:background="?attr/selectableItemBackground" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
                 android:id="@+id/btnBackToCamera"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="← Назад до камери"
                 android:textColor="@color/white"
                 android:textSize="16sp"
-                android:padding="12dp"
+                android:padding="14dp"
                 android:background="?attr/selectableItemBackground" />
         </LinearLayout>
     </FrameLayout>

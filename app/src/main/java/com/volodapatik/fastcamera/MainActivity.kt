@@ -72,17 +72,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Proper insets for top and bottom bars
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            // Top bar: push below status bar
             binding.topBar.updatePadding(top = systemBars.top + 6)
-
-            // Bottom bar: push above navigation bar
             binding.bottomBar.updatePadding(bottom = systemBars.bottom + 10)
-
-            // Preview overlay bars too
             binding.previewTopBar.updatePadding(top = systemBars.top + 6)
             binding.previewBottomBar.updatePadding(bottom = systemBars.bottom + 10)
 
@@ -171,11 +165,10 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        // Thumbnail click → open full preview
+        // Тільки при натисканні на мініатюру відкриваємо перегляд
         binding.btnGallery.setOnClickListener { openLastPhotoPreview() }
         binding.imgLastPhoto.setOnClickListener { openLastPhotoPreview() }
 
-        // Preview overlay controls
         binding.btnClosePreview.setOnClickListener { closePhotoPreview() }
         binding.btnBackToCamera.setOnClickListener { closePhotoPreview() }
 
@@ -189,10 +182,18 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent.createChooser(shareIntent, "Поділитися фото"))
             }
         }
+
+        binding.btnDeletePhoto.setOnClickListener {
+            deleteLastPhoto()
+        }
     }
 
     private fun openLastPhotoPreview() {
-        val uri = lastPhotoUri ?: return
+        val uri = lastPhotoUri
+        if (uri == null) {
+            Toast.makeText(this, "Немає фото для перегляду", Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
             val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val source = ImageDecoder.createSource(contentResolver, uri)
@@ -212,6 +213,26 @@ class MainActivity : AppCompatActivity() {
     private fun closePhotoPreview() {
         binding.previewOverlay.visibility = View.GONE
         binding.imgFullPreview.setImageDrawable(null)
+    }
+
+    private fun deleteLastPhoto() {
+        val uri = lastPhotoUri ?: return
+        try {
+            val deleted = contentResolver.delete(uri, null, null)
+            if (deleted > 0) {
+                lastPhotoUri = null
+                binding.imgLastPhoto.setImageDrawable(null)
+                binding.imgLastPhoto.visibility = View.GONE
+                binding.btnGallery.visibility = View.VISIBLE
+                closePhotoPreview()
+                Toast.makeText(this, "Фото видалено", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Не вдалося видалити", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Delete failed", e)
+            Toast.makeText(this, "Помилка видалення", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun checkPermissionsAndStart() {
@@ -333,8 +354,7 @@ class MainActivity : AppCompatActivity() {
                     if (uri != null) {
                         lastPhotoUri = uri
                         showLastPhotoThumbnail(uri)
-                        // Одразу відкриваємо повноекранний перегляд
-                        openLastPhotoPreview()
+                        // НЕ відкриваємо автоматично — тільки мініатюра
                     }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
