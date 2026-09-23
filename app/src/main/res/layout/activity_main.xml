@@ -16,34 +16,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Grid overlay -->
     <View
         android:id="@+id/gridOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="@drawable/grid_overlay"
         android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false"
         app:layout_constraintTop_toTopOf="@id/previewView"
         app:layout_constraintBottom_toBottomOf="@id/previewView"
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintEnd_toEndOf="@id/previewView" />
-
-    <!-- Recording timer -->
-    <TextView
-        android:id="@+id/tvRecordingTime"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="00:00"
-        android:textColor="#FFFF5252"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:background="#99000000"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="6dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/topBar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="12dp" />
 
     <!-- Top controls -->
     <LinearLayout
@@ -66,29 +51,46 @@
             android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_camera"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/flash"
+            android:contentDescription="Спалах"
             android:scaleType="centerInside"
             android:tint="@color/white" />
+
+        <TextView
+            android:id="@+id/tvFlashState"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OFF"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp" />
 
         <ImageButton
             android:id="@+id/btnTimer"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="8dp"
             android:src="@android:drawable/ic_menu_recent_history"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/timer"
+            android:contentDescription="Таймер"
             android:scaleType="centerInside"
             android:tint="@color/white" />
+
+        <TextView
+            android:id="@+id/tvTimerState"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@color/white"
+            android:textSize="11sp" />
 
         <ImageButton
             android:id="@+id/btnGrid"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="8dp"
             android:src="@android:drawable/ic_menu_view"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/grid"
+            android:contentDescription="Сітка"
             android:scaleType="centerInside"
             android:tint="@color/white" />
 
@@ -109,10 +111,28 @@
             android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_rotate"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/switch_camera"
+            android:contentDescription="Перемкнути камеру"
             android:scaleType="centerInside"
             android:tint="@color/white" />
     </LinearLayout>
+
+    <!-- Recording timer -->
+    <TextView
+        android:id="@+id/tvRecordingTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="00:00"
+        android:textColor="#FF5252"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:background="#99000000"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp" />
 
     <!-- Bottom controls -->
     <LinearLayout
@@ -164,7 +184,7 @@
             android:layout_width="72dp"
             android:layout_height="72dp"
             android:background="@drawable/capture_button"
-            android:contentDescription="@string/take_photo" />
+            android:contentDescription="Зняти" />
 
         <View
             android:layout_width="0dp"
@@ -182,7 +202,7 @@
             android:tint="@color/white" />
     </LinearLayout>
 
-    <!-- Full-screen preview overlay -->
+    <!-- Full-screen photo viewer -->
     <FrameLayout
         android:id="@+id/previewOverlay"
         android:layout_width="0dp"
@@ -285,7 +305,7 @@
                 android:id="@+id/btnBackToCamera"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="← Назад"
+                android:text="← Камера"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:padding="14dp"
