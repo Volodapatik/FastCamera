@@ -15,7 +15,6 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -27,7 +26,6 @@ import androidx.core.content.PermissionChecker
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import com.volodapatik.fastcamera.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
@@ -69,25 +67,30 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Fullscreen + edge-to-edge
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Handle system bars (status + navigation)
+        // Proper insets for top and bottom bars
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            binding.topBar.updatePadding(top = systemBars.top + 8)
-            binding.bottomBar.updatePadding(bottom = systemBars.bottom + 12)
+            // Top bar: push below status bar
+            binding.topBar.updatePadding(top = systemBars.top + 6)
+
+            // Bottom bar: push above navigation bar
+            binding.bottomBar.updatePadding(bottom = systemBars.bottom + 10)
+
+            // Preview overlay bars too
+            binding.previewTopBar.updatePadding(top = systemBars.top + 6)
+            binding.previewBottomBar.updatePadding(bottom = systemBars.bottom + 10)
 
             insets
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // Pinch to zoom
         scaleGestureDetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -168,37 +171,47 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        // Gallery / last photo
-        binding.btnGallery.setOnClickListener { openLastOrGallery() }
-        binding.imgLastPhoto.setOnClickListener { openLastOrGallery() }
-    }
+        // Thumbnail click → open full preview
+        binding.btnGallery.setOnClickListener { openLastPhotoPreview() }
+        binding.imgLastPhoto.setOnClickListener { openLastPhotoPreview() }
 
-    private fun openLastOrGallery() {
-        val uri = lastPhotoUri
-        if (uri != null) {
-            try {
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "image/*")
+        // Preview overlay controls
+        binding.btnClosePreview.setOnClickListener { closePhotoPreview() }
+        binding.btnBackToCamera.setOnClickListener { closePhotoPreview() }
+
+        binding.btnSharePreview.setOnClickListener {
+            lastPhotoUri?.let { uri ->
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/jpeg"
+                    putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                startActivity(intent)
-            } catch (e: Exception) {
-                openSystemGallery()
+                startActivity(Intent.createChooser(shareIntent, "Поділитися фото"))
             }
-        } else {
-            openSystemGallery()
         }
     }
 
-    private fun openSystemGallery() {
+    private fun openLastPhotoPreview() {
+        val uri = lastPhotoUri ?: return
         try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                type = "image/*"
+            val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                ImageDecoder.decodeBitmap(source)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaStore.Images.Media.getBitmap(contentResolver, uri)
             }
-            startActivity(intent)
+            binding.imgFullPreview.setImageBitmap(bitmap)
+            binding.previewOverlay.visibility = View.VISIBLE
         } catch (e: Exception) {
-            Toast.makeText(this, "Галерея недоступна", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Failed to open preview", e)
+            Toast.makeText(this, "Не вдалося відкрити фото", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun closePhotoPreview() {
+        binding.previewOverlay.visibility = View.GONE
+        binding.imgFullPreview.setImageDrawable(null)
     }
 
     private fun checkPermissionsAndStart() {
@@ -320,6 +333,8 @@ class MainActivity : AppCompatActivity() {
                     if (uri != null) {
                         lastPhotoUri = uri
                         showLastPhotoThumbnail(uri)
+                        // Одразу відкриваємо повноекранний перегляд
+                        openLastPhotoPreview()
                     }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
@@ -336,7 +351,7 @@ class MainActivity : AppCompatActivity() {
             val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val source = ImageDecoder.createSource(contentResolver, uri)
                 ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                    decoder.setTargetSampleSize(8) // small thumbnail
+                    decoder.setTargetSampleSize(8)
                 }
             } else {
                 @Suppress("DEPRECATION")
