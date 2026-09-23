@@ -50,8 +50,7 @@ class MainActivity : AppCompatActivity() {
     private var isVideoMode = false
     private var timerSeconds = 0
     private var countDownTimer: CountDownTimer? = null
-    private var lastMediaUri: Uri? = null
-    private var lastMediaIsVideo = false
+    private var lastPhotoUri: Uri? = null
 
     private var recordingStartTime = 0L
     private val recordingHandler = Handler(Looper.getMainLooper())
@@ -61,7 +60,7 @@ class MainActivity : AppCompatActivity() {
             val min = elapsed / 60
             val sec = elapsed % 60
             binding.tvRecordingTime.text = String.format("%02d:%02d", min, sec)
-            recordingHandler.postDelayed(this, 500)
+            recordingHandler.postDelayed(this, 1000)
         }
     }
 
@@ -126,6 +125,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupButtons()
+        updateFlashUI()
         checkPermissionsAndStart()
     }
 
@@ -151,12 +151,7 @@ class MainActivity : AppCompatActivity() {
                 else -> ImageCapture.FLASH_MODE_OFF
             }
             imageCapture?.flashMode = flashMode
-            val text = when (flashMode) {
-                ImageCapture.FLASH_MODE_ON -> "Спалах: Увімк"
-                ImageCapture.FLASH_MODE_AUTO -> "Спалах: Авто"
-                else -> "Спалах: Вимк"
-            }
-            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+            updateFlashUI()
         }
 
         binding.btnTimer.setOnClickListener {
@@ -166,13 +161,14 @@ class MainActivity : AppCompatActivity() {
                 5 -> 10
                 else -> 0
             }
-            val text = if (timerSeconds == 0) "Таймер: вимк" else "Таймер: ${timerSeconds}с"
-            Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+            binding.tvTimerState.text = if (timerSeconds == 0) "" else "${timerSeconds}s"
+            Toast.makeText(this, if (timerSeconds == 0) "Таймер: вимк" else "Таймер: ${timerSeconds}с", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnGrid.setOnClickListener {
             isGridVisible = !isGridVisible
             binding.gridOverlay.visibility = if (isGridVisible) View.VISIBLE else View.GONE
+            binding.btnGrid.alpha = if (isGridVisible) 1f else 0.5f
             Toast.makeText(this, if (isGridVisible) "Сітка: увімк" else "Сітка: вимк", Toast.LENGTH_SHORT).show()
         }
 
@@ -183,17 +179,16 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        binding.btnGallery.setOnClickListener { openLastMedia() }
-        binding.imgLastPhoto.setOnClickListener { openLastMedia() }
+        binding.btnGallery.setOnClickListener { openLastPhotoPreview() }
+        binding.imgLastPhoto.setOnClickListener { openLastPhotoPreview() }
 
         binding.btnClosePreview.setOnClickListener { closePhotoPreview() }
         binding.btnBackToCamera.setOnClickListener { closePhotoPreview() }
 
         binding.btnSharePreview.setOnClickListener {
-            lastMediaUri?.let { uri ->
-                val type = if (lastMediaIsVideo) "video/mp4" else "image/jpeg"
+            lastPhotoUri?.let { uri ->
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    this.type = type
+                    type = "image/jpeg"
                     putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
@@ -201,46 +196,41 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnDeletePhoto.setOnClickListener { deleteLastMedia() }
+        binding.btnDeletePhoto.setOnClickListener { deleteLastPhoto() }
 
         binding.btnOpenInGallery.setOnClickListener {
-            lastMediaUri?.let { uri ->
+            lastPhotoUri?.let { uri ->
                 try {
                     val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, if (lastMediaIsVideo) "video/*" else "image/*")
+                        setDataAndType(uri, "image/*")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     startActivity(intent)
                 } catch (e: Exception) {
-                    Toast.makeText(this, "Немає програми для відкриття", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Не вдалося відкрити галерею", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    private fun openLastMedia() {
-        val uri = lastMediaUri
-        if (uri == null) {
-            Toast.makeText(this, "Немає медіа для перегляду", Toast.LENGTH_SHORT).show()
-            return
+    private fun updateFlashUI() {
+        val text = when (flashMode) {
+            ImageCapture.FLASH_MODE_ON -> "ON"
+            ImageCapture.FLASH_MODE_AUTO -> "AUTO"
+            else -> "OFF"
         }
-        if (lastMediaIsVideo) {
-            // Для відео одразу відкриваємо в системі
-            try {
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "video/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(intent)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Немає відеоплеєра", Toast.LENGTH_SHORT).show()
-            }
+        binding.tvFlashState.text = text
+    }
+
+    private fun openLastPhotoPreview() {
+        val uri = lastPhotoUri
+        if (uri == null) {
+            Toast.makeText(this, "Немає фото", Toast.LENGTH_SHORT).show()
             return
         }
         try {
             val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val source = ImageDecoder.createSource(contentResolver, uri)
-                ImageDecoder.decodeBitmap(source)
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver, uri))
             } else {
                 @Suppress("DEPRECATION")
                 MediaStore.Images.Media.getBitmap(contentResolver, uri)
@@ -249,7 +239,7 @@ class MainActivity : AppCompatActivity() {
             binding.previewOverlay.visibility = View.VISIBLE
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open preview", e)
-            Toast.makeText(this, "Не вдалося відкрити", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Помилка відкриття", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -258,52 +248,40 @@ class MainActivity : AppCompatActivity() {
         binding.imgFullPreview.setImageDrawable(null)
     }
 
-    private fun deleteLastMedia() {
-        val uri = lastMediaUri ?: return
+    private fun deleteLastPhoto() {
+        val uri = lastPhotoUri ?: return
         try {
-            val deleted = contentResolver.delete(uri, null, null)
-            if (deleted > 0) {
-                lastMediaUri = null
-                lastMediaIsVideo = false
+            if (contentResolver.delete(uri, null, null) > 0) {
+                lastPhotoUri = null
                 binding.imgLastPhoto.setImageDrawable(null)
                 binding.imgLastPhoto.visibility = View.GONE
                 binding.btnGallery.visibility = View.VISIBLE
                 closePhotoPreview()
                 Toast.makeText(this, "Видалено", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Не вдалося видалити", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Delete failed", e)
             Toast.makeText(this, "Помилка видалення", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun checkPermissionsAndStart() {
-        val permissions = mutableListOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
-        )
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
+        val permissions = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
             permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
         }
-
-        val allGranted = permissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+            startCamera()
+        } else {
+            requestPermissionLauncher.launch(permissions.toTypedArray())
         }
-
-        if (allGranted) startCamera()
-        else requestPermissionLauncher.launch(permissions.toTypedArray())
     }
 
     private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            cameraProvider = cameraProviderFuture.get()
+        val future = ProcessCameraProvider.getInstance(this)
+        future.addListener({
+            cameraProvider = future.get()
             bindCameraUseCases()
         }, ContextCompat.getMainExecutor(this))
     }
@@ -315,9 +293,7 @@ class MainActivity : AppCompatActivity() {
             it.surfaceProvider = binding.previewView.surfaceProvider
         }
 
-        val cameraSelector = CameraSelector.Builder()
-            .requireLensFacing(lensFacing)
-            .build()
+        val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
 
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
@@ -331,37 +307,28 @@ class MainActivity : AppCompatActivity() {
 
         try {
             cameraProvider.unbindAll()
-
-            val useCases = if (isVideoMode) {
-                arrayOf(preview, videoCapture)
-            } else {
-                arrayOf(preview, imageCapture)
-            }
-
+            val useCases = if (isVideoMode) arrayOf(preview, videoCapture) else arrayOf(preview, imageCapture)
             camera = cameraProvider.bindToLifecycle(this, cameraSelector, *useCases)
-
         } catch (e: Exception) {
-            Log.e(TAG, "Use case binding failed", e)
-            Toast.makeText(this, "Помилка камери: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e(TAG, "Binding failed", e)
+            Toast.makeText(this, "Помилка камери", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun takePhotoWithTimer() {
-        if (timerSeconds > 0) startCountdown(timerSeconds) { takePhoto() }
-        else takePhoto()
+        if (timerSeconds > 0) startCountdown(timerSeconds) { takePhoto() } else takePhoto()
     }
 
     private fun startRecordingWithTimer() {
-        if (timerSeconds > 0) startCountdown(timerSeconds) { startRecording() }
-        else startRecording()
+        if (timerSeconds > 0) startCountdown(timerSeconds) { startRecording() } else startRecording()
     }
 
     private fun startCountdown(seconds: Int, onFinish: () -> Unit) {
         binding.tvTimerCountdown.visibility = View.VISIBLE
         countDownTimer?.cancel()
         countDownTimer = object : CountDownTimer(seconds * 1000L, 1000L) {
-            override fun onTick(millisUntilFinished: Long) {
-                binding.tvTimerCountdown.text = ((millisUntilFinished / 1000) + 1).toString()
+            override fun onTick(millis: Long) {
+                binding.tvTimerCountdown.text = ((millis / 1000) + 1).toString()
             }
             override fun onFinish() {
                 binding.tvTimerCountdown.visibility = View.GONE
@@ -372,9 +339,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-
-        val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-            .format(System.currentTimeMillis())
+        val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "FC_$name")
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
@@ -382,51 +347,40 @@ class MainActivity : AppCompatActivity() {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FastCamera")
             }
         }
-
         val outputOptions = ImageCapture.OutputFileOptions.Builder(
-            contentResolver,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues
+            contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues
         ).build()
 
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
+        imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val uri = output.savedUri
-                    if (uri != null) {
-                        lastMediaUri = uri
-                        lastMediaIsVideo = false
-                        showLastPhotoThumbnail(uri)
+                    output.savedUri?.let {
+                        lastPhotoUri = it
+                        showLastPhotoThumbnail(it)
                     }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
                 override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exp)
                     Toast.makeText(baseContext, "Помилка фото", Toast.LENGTH_SHORT).show()
                 }
-            }
-        )
+            })
     }
 
     private fun showLastPhotoThumbnail(uri: Uri) {
         try {
-            val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val source = ImageDecoder.createSource(contentResolver, uri)
-                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver, uri)) { decoder, _, _ ->
                     decoder.setTargetSampleSize(8)
                 }
             } else {
                 @Suppress("DEPRECATION")
                 MediaStore.Images.Media.getBitmap(contentResolver, uri)
             }
-
             binding.imgLastPhoto.setImageBitmap(bitmap)
             binding.imgLastPhoto.visibility = View.VISIBLE
             binding.btnGallery.visibility = View.INVISIBLE
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load thumbnail", e)
+            Log.e(TAG, "Thumbnail error", e)
         }
     }
 
@@ -434,8 +388,7 @@ class MainActivity : AppCompatActivity() {
         val videoCapture = this.videoCapture ?: return
         binding.btnCapture.isEnabled = false
 
-        val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-            .format(System.currentTimeMillis())
+        val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "FC_$name")
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
@@ -445,17 +398,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val mediaStoreOutput = MediaStoreOutputOptions.Builder(
-            contentResolver,
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         ).setContentValues(contentValues).build()
 
         recording = videoCapture.output
             .prepareRecording(this, mediaStoreOutput)
             .apply {
-                if (PermissionChecker.checkSelfPermission(
-                        this@MainActivity, Manifest.permission.RECORD_AUDIO
-                    ) == PermissionChecker.PERMISSION_GRANTED
-                ) {
+                if (PermissionChecker.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PermissionChecker.PERMISSION_GRANTED) {
                     withAudioEnabled()
                 }
             }
@@ -463,9 +412,8 @@ class MainActivity : AppCompatActivity() {
                 when (event) {
                     is VideoRecordEvent.Start -> {
                         binding.btnCapture.isEnabled = true
-                        recordingStartTime = System.currentTimeMillis()
                         binding.tvRecordingTime.visibility = View.VISIBLE
-                        binding.tvRecordingTime.text = "00:00"
+                        recordingStartTime = System.currentTimeMillis()
                         recordingHandler.post(recordingRunnable)
                         Toast.makeText(this@MainActivity, "Запис...", Toast.LENGTH_SHORT).show()
                     }
@@ -473,16 +421,10 @@ class MainActivity : AppCompatActivity() {
                         recordingHandler.removeCallbacks(recordingRunnable)
                         binding.tvRecordingTime.visibility = View.GONE
                         if (!event.hasError()) {
-                            lastMediaUri = event.outputResults.outputUri
-                            lastMediaIsVideo = true
-                            // Для відео просто показуємо іконку галереї
-                            binding.imgLastPhoto.visibility = View.GONE
-                            binding.btnGallery.visibility = View.VISIBLE
                             Toast.makeText(this@MainActivity, "Відео збережено", Toast.LENGTH_SHORT).show()
                         } else {
                             recording?.close()
                             recording = null
-                            Log.e(TAG, "Video capture error: ${event.error}")
                         }
                         binding.btnCapture.isEnabled = true
                     }
