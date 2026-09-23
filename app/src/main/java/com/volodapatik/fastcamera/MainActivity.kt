@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.view.MotionEvent
@@ -48,7 +50,20 @@ class MainActivity : AppCompatActivity() {
     private var isVideoMode = false
     private var timerSeconds = 0
     private var countDownTimer: CountDownTimer? = null
-    private var lastPhotoUri: Uri? = null
+    private var lastMediaUri: Uri? = null
+    private var lastMediaIsVideo = false
+
+    private var recordingStartTime = 0L
+    private val recordingHandler = Handler(Looper.getMainLooper())
+    private val recordingRunnable = object : Runnable {
+        override fun run() {
+            val elapsed = (System.currentTimeMillis() - recordingStartTime) / 1000
+            val min = elapsed / 60
+            val sec = elapsed % 60
+            binding.tvRecordingTime.text = String.format("%02d:%02d", min, sec)
+            recordingHandler.postDelayed(this, 500)
+        }
+    }
 
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var scaleGestureDetector: ScaleGestureDetector
@@ -75,8 +90,6 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-
-            // Більший відступ зверху, щоб кнопки були під punch-hole камерою
             val topPadding = maxOf(systemBars.top, cutout.top) + 28
 
             binding.topBar.updatePadding(top = topPadding)
@@ -160,6 +173,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnGrid.setOnClickListener {
             isGridVisible = !isGridVisible
             binding.gridOverlay.visibility = if (isGridVisible) View.VISIBLE else View.GONE
+            Toast.makeText(this, if (isGridVisible) "Сітка: увімк" else "Сітка: вимк", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnMode.setOnClickListener {
@@ -169,32 +183,58 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        binding.btnGallery.setOnClickListener { openLastPhotoPreview() }
-        binding.imgLastPhoto.setOnClickListener { openLastPhotoPreview() }
+        binding.btnGallery.setOnClickListener { openLastMedia() }
+        binding.imgLastPhoto.setOnClickListener { openLastMedia() }
 
         binding.btnClosePreview.setOnClickListener { closePhotoPreview() }
         binding.btnBackToCamera.setOnClickListener { closePhotoPreview() }
 
         binding.btnSharePreview.setOnClickListener {
-            lastPhotoUri?.let { uri ->
+            lastMediaUri?.let { uri ->
+                val type = if (lastMediaIsVideo) "video/mp4" else "image/jpeg"
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/jpeg"
+                    this.type = type
                     putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                startActivity(Intent.createChooser(shareIntent, "Поділитися фото"))
+                startActivity(Intent.createChooser(shareIntent, "Поділитися"))
             }
         }
 
-        binding.btnDeletePhoto.setOnClickListener {
-            deleteLastPhoto()
+        binding.btnDeletePhoto.setOnClickListener { deleteLastMedia() }
+
+        binding.btnOpenInGallery.setOnClickListener {
+            lastMediaUri?.let { uri ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, if (lastMediaIsVideo) "video/*" else "image/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Немає програми для відкриття", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
-    private fun openLastPhotoPreview() {
-        val uri = lastPhotoUri
+    private fun openLastMedia() {
+        val uri = lastMediaUri
         if (uri == null) {
-            Toast.makeText(this, "Немає фото для перегляду", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Немає медіа для перегляду", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (lastMediaIsVideo) {
+            // Для відео одразу відкриваємо в системі
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "video/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Немає відеоплеєра", Toast.LENGTH_SHORT).show()
+            }
             return
         }
         try {
@@ -209,7 +249,7 @@ class MainActivity : AppCompatActivity() {
             binding.previewOverlay.visibility = View.VISIBLE
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open preview", e)
-            Toast.makeText(this, "Не вдалося відкрити фото", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Не вдалося відкрити", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -218,17 +258,18 @@ class MainActivity : AppCompatActivity() {
         binding.imgFullPreview.setImageDrawable(null)
     }
 
-    private fun deleteLastPhoto() {
-        val uri = lastPhotoUri ?: return
+    private fun deleteLastMedia() {
+        val uri = lastMediaUri ?: return
         try {
             val deleted = contentResolver.delete(uri, null, null)
             if (deleted > 0) {
-                lastPhotoUri = null
+                lastMediaUri = null
+                lastMediaIsVideo = false
                 binding.imgLastPhoto.setImageDrawable(null)
                 binding.imgLastPhoto.visibility = View.GONE
                 binding.btnGallery.visibility = View.VISIBLE
                 closePhotoPreview()
-                Toast.makeText(this, "Фото видалено", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Видалено", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Не вдалося видалити", Toast.LENGTH_SHORT).show()
             }
@@ -355,13 +396,14 @@ class MainActivity : AppCompatActivity() {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val uri = output.savedUri
                     if (uri != null) {
-                        lastPhotoUri = uri
+                        lastMediaUri = uri
+                        lastMediaIsVideo = false
                         showLastPhotoThumbnail(uri)
                     }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
                 override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                    Log.e(TAG, "Photo capture failed: ${exc.message}", exp)
                     Toast.makeText(baseContext, "Помилка фото", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -421,10 +463,21 @@ class MainActivity : AppCompatActivity() {
                 when (event) {
                     is VideoRecordEvent.Start -> {
                         binding.btnCapture.isEnabled = true
+                        recordingStartTime = System.currentTimeMillis()
+                        binding.tvRecordingTime.visibility = View.VISIBLE
+                        binding.tvRecordingTime.text = "00:00"
+                        recordingHandler.post(recordingRunnable)
                         Toast.makeText(this@MainActivity, "Запис...", Toast.LENGTH_SHORT).show()
                     }
                     is VideoRecordEvent.Finalize -> {
+                        recordingHandler.removeCallbacks(recordingRunnable)
+                        binding.tvRecordingTime.visibility = View.GONE
                         if (!event.hasError()) {
+                            lastMediaUri = event.outputResults.outputUri
+                            lastMediaIsVideo = true
+                            // Для відео просто показуємо іконку галереї
+                            binding.imgLastPhoto.visibility = View.GONE
+                            binding.btnGallery.visibility = View.VISIBLE
                             Toast.makeText(this@MainActivity, "Відео збережено", Toast.LENGTH_SHORT).show()
                         } else {
                             recording?.close()
@@ -441,12 +494,15 @@ class MainActivity : AppCompatActivity() {
     private fun stopRecording() {
         recording?.stop()
         recording = null
+        recordingHandler.removeCallbacks(recordingRunnable)
+        binding.tvRecordingTime.visibility = View.GONE
     }
 
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
         countDownTimer?.cancel()
+        recordingHandler.removeCallbacks(recordingRunnable)
     }
 
     companion object {
