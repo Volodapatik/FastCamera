@@ -27,6 +27,24 @@
         app:layout_constraintStart_toStartOf="@id/previewView"
         app:layout_constraintEnd_toEndOf="@id/previewView" />
 
+    <!-- Recording timer -->
+    <TextView
+        android:id="@+id/tvRecordingTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="00:00"
+        android:textColor="#FFFF5252"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:background="#99000000"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp" />
+
     <!-- Top controls -->
     <LinearLayout
         android:id="@+id/topBar"
@@ -164,7 +182,7 @@
             android:tint="@color/white" />
     </LinearLayout>
 
-    <!-- Full-screen photo viewer -->
+    <!-- Full-screen preview overlay -->
     <FrameLayout
         android:id="@+id/previewOverlay"
         android:layout_width="0dp"
@@ -184,7 +202,6 @@
             android:layout_height="match_parent"
             android:scaleType="fitCenter" />
 
-        <!-- Top bar -->
         <LinearLayout
             android:id="@+id/previewTopBar"
             android:layout_width="match_parent"
@@ -224,7 +241,6 @@
                 android:contentDescription="Поділитися" />
         </LinearLayout>
 
-        <!-- Bottom bar with Delete -->
         <LinearLayout
             android:id="@+id/previewBottomBar"
             android:layout_width="match_parent"
@@ -251,10 +267,25 @@
                 android:layout_weight="1" />
 
             <TextView
+                android:id="@+id/btnOpenInGallery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Відкрити в галереї"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:padding="14dp"
+                android:background="?attr/selectableItemBackground" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
                 android:id="@+id/btnBackToCamera"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="← Назад до камери"
+                android:text="← Назад"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:padding="14dp"
