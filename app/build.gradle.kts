@@ -11,8 +11,8 @@ android {
         applicationId = "com.volodapatik.fastcamera"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -28,6 +28,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            isDebuggable = true
         }
     }
 
@@ -42,6 +43,12 @@ android {
 
     buildFeatures {
         viewBinding = true
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
@@ -59,6 +66,5 @@ dependencies {
     implementation("androidx.camera:camera-view:${cameraxVersion}")
     implementation("androidx.camera:camera-video:${cameraxVersion}")
 
-    // For saving to gallery
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 }
