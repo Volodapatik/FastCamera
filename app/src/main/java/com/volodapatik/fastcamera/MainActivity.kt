@@ -74,11 +74,15 @@ class MainActivity : AppCompatActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
 
-            binding.topBar.updatePadding(top = systemBars.top + 6)
-            binding.bottomBar.updatePadding(bottom = systemBars.bottom + 10)
-            binding.previewTopBar.updatePadding(top = systemBars.top + 6)
-            binding.previewBottomBar.updatePadding(bottom = systemBars.bottom + 10)
+            // Більший відступ зверху, щоб кнопки були під punch-hole камерою
+            val topPadding = maxOf(systemBars.top, cutout.top) + 28
+
+            binding.topBar.updatePadding(top = topPadding)
+            binding.bottomBar.updatePadding(bottom = systemBars.bottom + 12)
+            binding.previewTopBar.updatePadding(top = topPadding)
+            binding.previewBottomBar.updatePadding(bottom = systemBars.bottom + 12)
 
             insets
         }
@@ -165,7 +169,6 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         }
 
-        // Тільки при натисканні на мініатюру відкриваємо перегляд
         binding.btnGallery.setOnClickListener { openLastPhotoPreview() }
         binding.imgLastPhoto.setOnClickListener { openLastPhotoPreview() }
 
@@ -354,7 +357,6 @@ class MainActivity : AppCompatActivity() {
                     if (uri != null) {
                         lastPhotoUri = uri
                         showLastPhotoThumbnail(uri)
-                        // НЕ відкриваємо автоматично — тільки мініатюра
                     }
                     Toast.makeText(baseContext, "Фото збережено", Toast.LENGTH_SHORT).show()
                 }
